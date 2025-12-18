@@ -1,211 +1,158 @@
-// static/js/tree.js
+let selfPersonId = null;
 
-// Данные хранятся ONLY в памяти (не в localStorage!) → сбрасываются при обновлении
-let familyTree = null; // корень дерева
-
-// Генерация уникального ID (для ссылок внутри дерева)
-let nextId = 1;
-const generateId = () => nextId++;
-
-// Добавить себя как корень дерева
-window.addSelf = () => {
-    const name = document.getElementById('selfName')?.value.trim();
-    const surname = document.getElementById('selfSurname')?.value.trim();
-    const gender = document.getElementById('selfGender')?.value;
-    const birth = document.getElementById('selfBirth')?.value;
-
-    if (!name || !surname || !gender) {
-        app.showNotification('Заполните имя, фамилию и пол', 'warning');
-        return;
-    }
-
-    familyTree = {
-        id: generateId(),
-        name,
-        surname,
-        gender: parseInt(gender),
-        yearOfBirth: birth ? parseInt(birth) : null,
-        role: 'self',
-        relatives: [] // дети, супруги, родители — всё здесь
-    };
-
-    renderTreeControls();
-    app.showNotification('Вы добавлены как основной человек', 'success');
-};
-
-// Отрендерить форму для добавления родственника к выбранному человеку
-window.addRelativeForm = () => {
-    if (!familyTree) {
-        app.showNotification('Сначала добавьте себя', 'warning');
-        return;
-    }
-
-    const container = document.getElementById('relativesFormsContainer');
-    const formId = Date.now();
-
-    // Собираем список всех людей для выбора "к кому привязать"
-    const allPeople = collectAllPeople(familyTree);
-    const peopleOptions = allPeople.map(p => {
-        const fullName = `${p.name} ${p.surname}`;
-        const role = p.role === 'self' ? ' (Вы)' :
-                    p.role === 'father' ? ' (Отец)' :
-                    p.role === 'mother' ? ' (Мать)' :
-                    p.role === 'son' ? ' (Сын)' :
-                    p.role === 'daughter' ? ' (Дочь)' :
-                    p.role === 'husband' ? ' (Муж)' : ' (Жена)';
-        return `<option value="${p.id}">${fullName}${role}</option>`;
-    }).join('');
-
-    const formHtml = `
-        <div class="glass-card" id="relForm_${formId}" style="margin-top: 1rem;">
-            <div class="section-header">
-                <h3>Новый родственник</h3>
-                <button type="button" class="btn-small" onclick="removeRelativeForm('${formId}')"
-                    style="background: none; border: none; color: var(--text-secondary); font-size: 1.2rem;">❌</button>
-            </div>
-            <div class="modern-form-grid">
-                <select id="relTarget_${formId}">
-                    <option value="">К кому добавить?</option>
-                    ${peopleOptions}
-                </select>
-                <input type="text" id="relName_${formId}" placeholder="Имя">
-                <input type="text" id="relSurname_${formId}" placeholder="Фамилия">
-                <select id="relGender_${formId}">
-                    <option value="1">Мужской</option>
-                    <option value="0">Женский</option>
-                </select>
-                <input type="number" id="relBirth_${formId}" placeholder="Год рождения">
-                <select id="relType_${formId}">
-                    <option value="father">Отец</option>
-                    <option value="mother">Мать</option>
-                    <option value="son">Сын</option>
-                    <option value="daughter">Дочь</option>
-                    <option value="husband">Муж</option>
-                    <option value="wife">Жена</option>
-                </select>
-                <button type="button" class="btn-secondary" onclick="addRelative('${formId}')">Добавить</button>
-            </div>
-        </div>
-    `;
-
-    container.innerHTML = formHtml; // ← перезаписываем, а не добавляем (чтобы не накапливать формы)
-};
-
-// Удалить форму (визуально)
-window.removeRelativeForm = (formId) => {
-    const form = document.getElementById(`relForm_${formId}`);
-    if (form) form.remove();
-};
-
-// Найти человека по ID в дереве (рекурсивно)
-function findPerson(node, id) {
-    if (node.id === id) return node;
-    for (let rel of node.relatives) {
-        const found = findPerson(rel, id);
-        if (found) return found;
-    }
-    return null;
+function setStatus(text) {
+  const el = document.getElementById('selfStatus');
+  if (el) el.textContent = text;
 }
 
-// Собрать всех людей для выпадающего списка
-function collectAllPeople(node, list = []) {
-    list.push(node);
-    for (let rel of node.relatives) {
-        collectAllPeople(rel, list);
-    }
-    return list;
+async function apiPost(url, payload) {
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return await resp.json();
 }
 
-// Добавить родственника к выбранному человеку
-window.addRelative = (formId) => {
-    const targetId = document.getElementById(`relTarget_${formId}`)?.value;
-    const name = document.getElementById(`relName_${formId}`)?.value.trim();
-    const surname = document.getElementById(`relSurname_${formId}`)?.value.trim();
-    const gender = document.getElementById(`relGender_${formId}`)?.value;
-    const birth = document.getElementById(`relBirth_${formId}`)?.value;
-    const type = document.getElementById(`relType_${formId}`)?.value;
+// 1) Добавить себя (создаёт запись Person и сохраняет selfPersonId)
+window.addSelf = async function addSelf() {
+  const firstName = (document.getElementById('selfName').value || '').trim();
+  const lastName = (document.getElementById('selfSurname').value || '').trim();
+  const birthDate = document.getElementById('selfBirthDate').value || null;
 
-    if (!targetId || !name || !surname || !gender || !type) {
-        app.showNotification('Заполните все поля', 'warning');
-        return;
-    }
+  if (!firstName) {
+    setStatus('Укажите имя.');
+    return;
+  }
 
-    const target = findPerson(familyTree, parseInt(targetId));
-    if (!target) {
-        app.showNotification('Не удалось найти целевого человека', 'error');
-        return;
-    }
+  const data = await apiPost('/api/create/', {
+    first_name: firstName,
+    last_name: lastName,
+    birth_date: birthDate,
+    death_date: null,
+    father_id: null,
+    mother_id: null
+  });
 
-    const newPerson = {
-        id: generateId(),
-        name,
-        surname,
-        gender: parseInt(gender),
-        yearOfBirth: birth ? parseInt(birth) : null,
-        role: type,
-        relatives: []
-    };
+  if (data.status !== 'ok') {
+    setStatus('Ошибка сохранения в БД.');
+    console.log(data);
+    return;
+  }
 
-    target.relatives.push(newPerson);
-    renderTreeControls();
-    app.showNotification(`Добавлен ${type === 'father' ? 'отец' : type === 'mother' ? 'мать' : type === 'son' ? 'сын' : type === 'daughter' ? 'дочь' : type === 'husband' ? 'муж' : 'жена'} к ${target.name}`, 'success');
+  selfPersonId = data.person_id;
+  setStatus(`Вы сохранены в БД. Ваш ID: ${selfPersonId}. Теперь добавляйте родственников.`);
 };
 
-// Отрендерить форму ввода и кнопки
-function renderTreeControls() {
-    const container = document.getElementById('relativesFormsContainer');
-    container.innerHTML = `
-        <p style="text-align: center; color: var(--text-secondary);">
-            Добавьте родственников к любому человеку в дереве
-        </p>
-    `;
-}
+// 2) Добавить форму родственника (мы полностью контролируем структуру формы)
+window.addRelativeForm = function addRelativeForm() {
+  if (!selfPersonId) {
+    setStatus('Сначала добавьте себя (нужен ваш ID).');
+    return;
+  }
 
-// Построить визуальное дерево
-window.buildTree = () => {
-    const container = document.getElementById('treeContainer');
-    container.innerHTML = '';
+  const container = document.getElementById('relativesFormsContainer');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'glass-card';
+  wrapper.style.marginTop = '1rem';
+  wrapper.style.padding = '1rem';
 
-    if (!familyTree) {
-        container.innerHTML = '<div class="empty-state">Сначала добавьте себя</div>';
-        return;
+  wrapper.innerHTML = `
+    <div class="modern-form-grid">
+      <select class="relType">
+        <option value="father">Отец</option>
+        <option value="mother">Мать</option>
+        <option value="child_from_me">Ребёнок (от меня)</option>
+      </select>
+
+      <input type="text" class="relFirstName" placeholder="Имя родственника">
+      <input type="text" class="relLastName" placeholder="Фамилия родственника">
+      <input type="date" class="relBirthDate" placeholder="Дата рождения">
+
+      <button type="button" class="btn-primary relSaveBtn">Сохранить родственника (в БД)</button>
+      <button type="button" class="btn-secondary relRemoveBtn">Удалить форму</button>
+    </div>
+
+    <div class="relStatus" style="margin-top: .75rem; color:#666;"></div>
+  `;
+
+  container.appendChild(wrapper);
+
+  const saveBtn = wrapper.querySelector('.relSaveBtn');
+  const removeBtn = wrapper.querySelector('.relRemoveBtn');
+
+  removeBtn.addEventListener('click', () => wrapper.remove());
+
+  saveBtn.addEventListener('click', async () => {
+    const relType = wrapper.querySelector('.relType').value;
+    const firstName = (wrapper.querySelector('.relFirstName').value || '').trim();
+    const lastName = (wrapper.querySelector('.relLastName').value || '').trim();
+    const birthDate = wrapper.querySelector('.relBirthDate').value || null;
+    const statusEl = wrapper.querySelector('.relStatus');
+
+    if (!firstName) {
+      statusEl.textContent = 'Укажите имя родственника.';
+      return;
     }
 
-    const html = renderNode(familyTree, true);
-    container.innerHTML = `<div class="family-tree">${html}</div>`;
-    app.showNotification('Дерево построено!', 'success');
+    // Создаём родственника как Person
+    const created = await apiPost('/api/create/', {
+      first_name: firstName,
+      last_name: lastName,
+      birth_date: birthDate,
+      death_date: null,
+      father_id: null,
+      mother_id: null
+    });
+
+    if (created.status !== 'ok') {
+      statusEl.textContent = 'Ошибка создания родственника.';
+      console.log(created);
+      return;
+    }
+
+    const relId = created.person_id;
+
+    // Теперь связываем через father_id/mother_id
+    if (relType === 'father') {
+      // Обновляем "себя": father_id = relId
+      const upd = await apiPost('/api/set-parents/', {
+        person_id: selfPersonId,
+        father_id: relId,
+        mother_id: null
+      });
+      statusEl.textContent = upd.status === 'ok'
+        ? `Отец сохранён. ID отца: ${relId}. (Связь записана в father_id вашего Person)`
+        : 'Ошибка установки отца.';
+    }
+
+    if (relType === 'mother') {
+      // Обновляем "себя": mother_id = relId
+      const upd = await apiPost('/api/set-parents/', {
+        person_id: selfPersonId,
+        father_id: null,
+        mother_id: relId
+      });
+      statusEl.textContent = upd.status === 'ok'
+        ? `Мать сохранена. ID матери: ${relId}. (Связь записана в mother_id вашего Person)`
+        : 'Ошибка установки матери.';
+    }
+
+    if (relType === 'child_from_me') {
+      // Создаём ребёнка и связываем: father_id = selfPersonId (упрощённо)
+      // Если хочешь строго (с полом), надо добавить поле gender в модель, но сейчас делаем минимально.
+      const updChild = await apiPost('/api/set-parents/', {
+        person_id: relId,
+        father_id: selfPersonId,
+        mother_id: null
+      });
+
+      statusEl.textContent = updChild.status === 'ok'
+        ? `Ребёнок сохранён. ID ребёнка: ${relId}. (У ребёнка father_id = ваш ID ${selfPersonId})`
+        : 'Ошибка привязки ребёнка.';
+    }
+  });
 };
 
-// Рекурсивная отрисовка узла
-function renderNode(node, isRoot = false) {
-    const fullName = `${node.name} ${node.surname}`;
-    const icon = node.gender === 1 ? '👨' : '👩';
-    const roleLabel = node.role === 'self' ? 'Вы' :
-                      node.role === 'father' ? 'Отец' :
-                      node.role === 'mother' ? 'Мать' :
-                      node.role === 'son' ? 'Сын' :
-                      node.role === 'daughter' ? 'Дочь' :
-                      node.role === 'husband' ? 'Муж' : 'Жена';
-
-    let html = `
-        <div class="tree-node ${isRoot ? 'node-main' : (node.gender === 1 ? 'node-male' : 'node-female')}">
-            <div class="node-icon">${icon}</div>
-            <div class="node-content">
-                <h4>${fullName}</h4>
-                <p>${node.yearOfBirth || '?'}</p>
-                <small>${roleLabel}</small>
-            </div>
-        </div>
-    `;
-
-    // Рекурсивно рендерим родственников (детей, супругов)
-    if (node.relatives.length > 0) {
-        html += '<div class="tree-generation children-generation" style="justify-content: center; gap: 1.5rem;">';
-        node.relatives.forEach(child => {
-            html += renderNode(child, false);
-        });
-        html += '</div>';
-    }
-
-    return html;
-}
+// Заглушки, чтобы ничего не падало, если они где-то вызываются
+window.buildTree = function buildTree() {};

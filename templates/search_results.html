@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Результаты поиска</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f8;
+            padding: 40px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        .person {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .empty {
+            color: #666;
+        }
+        a {
+            display: inline-block;
+            margin-top: 20px;
+            text-decoration: none;
+            color: #3366cc;
+        }
+    </style>
+</head>
+<body>
+
+<h1>Результаты поиска</h1>
+
+{% if results %}
+    {% for person in results %}
+        <div class="person">
+            <strong>{{ person.first_name }} {{ person.last_name }}</strong><br>
+            Дата рождения: {{ person.birth_date|default:"неизвестна" }}<br>
+            Дата смерти: {{ person.death_date|default:"—" }}
+        </div>
+    {% endfor %}
+{% else %}
+    <p class="empty">По запросу «{{ query }}» ничего не найдено.</p>
+{% endif %}
+
+<a href="/">← Вернуться на главную</a>
+
+</body>
+</html>

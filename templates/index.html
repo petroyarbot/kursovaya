@@ -16,6 +16,7 @@
         <div class="bg-particle bg-particle-2"></div>
         <div class="bg-particle bg-particle-3"></div>
     </div>
+
     <header>
         <nav class="navbar">
             <div class="nav-brand">
@@ -23,18 +24,17 @@
                 <h1>Родовой След</h1>
             </div>
             <div class="nav-links">
-                <button data-section="searchSection" class="nav-btn active" title="Поиск">
+                <button data-section="searchSection" class="nav-btn active" title="Поиск" type="button">
                     <i class="fas fa-search"></i>
                 </button>
-                <button data-section="treeSection" class="nav-btn" title="Дерево">
+                <button data-section="treeSection" class="nav-btn" title="Дерево" type="button">
                     <i class="fas fa-sitemap"></i>
                 </button>
-                <button data-section="profileSection" class="nav-btn" title="Профиль">
-                    <i class="fas fa-user"></i>
-                </button>
+                
             </div>
         </nav>
     </header>
+
     <main>
         <!-- ВКЛАДКА 1: ПОИСК -->
         <section id="searchSection" class="section active">
@@ -42,17 +42,33 @@
                 <div class="section-header">
                     <h2><i class="fas fa-search"></i> Поиск в базе</h2>
                 </div>
-                <form id="simpleSearchForm" class="modern-form-grid">
-                    <input type="text" id="searchFio" placeholder="Имя, фамилия или отчество">
-                    <select id="searchGender">
+
+                <!-- ВАЖНО: теперь форма реально отправляет запрос в Django -->
+                <form id="simpleSearchForm" class="modern-form-grid" method="get" action="/api/search/">
+                    <!-- Главное поле: name="q" -->
+                    <input
+                        type="text"
+                        id="searchFio"
+                        name="q"
+                        placeholder="Имя, фамилия или отчество"
+                        value=""
+                        required
+                    >
+
+                    <!-- Доп. поля оставлены для интерфейса (пока не используются на backend) -->
+                    <select id="searchGender" name="gender">
                         <option value="">Любой пол</option>
                         <option value="1">Мужской</option>
                         <option value="0">Женский</option>
                     </select>
-                    <input type="number" id="searchYear" placeholder="Примерный год рождения">
-                    <input type="number" id="searchRange" value="5" min="0" max="20" placeholder="Диапазон (лет)">
+
+                    <input type="number" id="searchYear" name="year" placeholder="Примерный год рождения" min="0" step="1">
+                    <input type="number" id="searchRange" name="range" value="5" min="0" max="20" placeholder="Диапазон (лет)">
+
                     <button type="submit" class="btn-primary">Получить результат</button>
                 </form>
+
+                <!-- Если хочешь, можно показывать подсказку прямо на главной -->
                 <div id="searchResultBox" style="margin-top: 1.5rem;"></div>
             </div>
         </section>
@@ -98,54 +114,16 @@
             <div id="treeContainer" class="tree-container" style="margin-top: 2rem;"></div>
         </section>
 
-        <!-- ВКЛАДКА 3: ПРОФИЛЬ -->
-        <section id="profileSection" class="section">
-            <!-- Вход -->
-            <div class="glass-card" id="loginForm">
-                <div class="section-header">
-                    <h2><i class="fas fa-sign-in-alt"></i> Вход</h2>
-                </div>
-                <div class="modern-form-grid">
-                    <input type="email" id="loginEmail" placeholder="Email">
-                    <input type="password" id="loginPassword" placeholder="Пароль">
-                    <button type="button" class="btn-primary" onclick="loginUser()">Войти</button>
-                    <button type="button" class="btn-secondary" onclick="showRegister()">Регистрация</button>
-                </div>
-            </div>
 
-            <!-- Регистрация -->
-            <div class="glass-card" id="registerForm" style="display: none;">
-                <div class="section-header">
-                    <h2><i class="fas fa-user-plus"></i> Регистрация</h2>
-                </div>
-                <div class="modern-form-grid">
-                    <input type="text" id="regName" placeholder="Имя">
-                    <input type="text" id="regSurname" placeholder="Фамилия">
-                    <input type="email" id="regEmail" placeholder="Email">
-                    <input type="password" id="regPassword" placeholder="Пароль">
-                    <select id="regGender">
-                        <option value="1">Мужской</option>
-                        <option value="0">Женский</option>
-                    </select>
-                    <button type="button" class="btn-primary" onclick="registerUser()">Зарегистрироваться</button>
-                    <button type="button" class="btn-secondary" onclick="showLogin()">Уже есть аккаунт</button>
-                </div>
-            </div>
-
-            <!-- Профиль -->
-            <div class="glass-card" id="userProfile" style="display: none;">
-                <div class="section-header">
-                    <h2>Привет, <span id="userName"></span>!</h2>
-                </div>
-                <button type="button" class="btn-secondary" onclick="logout()">Выйти</button>
-            </div>
-        </section>
     </main>
 
     <script src="/static/js/api.js"></script>
-    <script src="/static/js/simpleSearch.js"></script>
+
+    <!-- ВАЖНО: отключено, чтобы не перехватывало submit и не показывало "Ошибка поиска" -->
+    <!-- <script src="/static/js/simpleSearch.js"></script> -->
+
     <script src="/static/js/tree.js"></script>
-    <script src="/static/js/auth.js"></script>
+
     <script src="/static/js/app.js"></script>
 
     <script>
